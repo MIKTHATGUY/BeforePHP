@@ -22,6 +22,11 @@ class Page
 	{
 		$page = '';
 		
+		// Make params available as variables in controller/view context
+		foreach ($this->params as $key => $value) {
+			$$key = $value;
+		}
+		
 		if ($this->viewPath !== null) {
 			// Has separate view: run controller first (if exists), then capture view
 			if ($this->controllerPath !== null) {

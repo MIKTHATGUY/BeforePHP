@@ -64,7 +64,7 @@ class Router
         }
 
         $currentPath = $this->matchedFolderPath;
-        $pagesRoot = Config::get('paths.pages');
+        $pagesRoot = Config::get('paths.app');
 
         // Search upward from matched folder to root
         while (strlen($currentPath) >= strlen($pagesRoot)) {
@@ -99,61 +99,170 @@ class Router
 
     private function resolveRoute(): void
     {
-        if (!$this->dfs(Config::get('paths.pages'))) {
-            // Route not found, try to find 404 page using same DFS
+        $uriSegments = $this->pageUriPath !== "" ? explode("/", $this->pageUriPath) : [];
+        $params = [];
+        
+        if (!$this->dfs(Config::get('paths.app'), $uriSegments, 0, null, $params)) {
+            // Route not found, try to find 404 page
             $this->isNotFound = true;
             $this->pageUriPath = "404";
+            $uriSegments = ["404"];
+            $params = [];
             $this->controllerPath = null;
             $this->viewPath = null;
             $this->layoutPath = null;
-            $this->dfs(Config::get('paths.pages'));
+            $this->dfs(Config::get('paths.app'), $uriSegments, 0, null, $params);
         }
     }
 
-    private function dfs(string $currentFolderPath, ?string $currentLayoutPath = null): bool
+    /**
+     * DFS with URI segment tracking
+     * 
+     * @param string $currentFolderPath Current folder being checked
+     * @param array $uriSegments Full URI segments array
+     * @param int $uriIndex Current position in URI segments
+     * @param string|null $currentLayoutPath Current layout path (for inheritance)
+     * @param array $params Route parameters collected so far
+     * @return bool True if route matched
+     */
+    private function dfs(string $currentFolderPath, array $uriSegments, int $uriIndex, ?string $currentLayoutPath, array &$params): bool
     {
-        // Check for layout in the current folder only once per visit
+        // Check for layout in current folder
         if (file_exists($currentFolderPath . "/layout.php")) {
             $currentLayoutPath = $currentFolderPath . "/layout.php";
         }
 
-        $fullPath = Config::get('paths.pages');
-        if ($this->pageUriPath !== "") {
-            $fullPath .= "/" . $this->pageUriPath;
-        }
-
-        if ($this->stripGroupsFromPath($currentFolderPath) === $fullPath) {
-            $hasController = file_exists($currentFolderPath . "/page.php");
-            $hasView = file_exists($currentFolderPath . "/page.html.php");
-            
-            if ($hasController || $hasView) {
+        // Check if this folder has page files and matches the URI at current position
+        $hasController = file_exists($currentFolderPath . "/page.php");
+        $hasView = file_exists($currentFolderPath . "/page.html.php");
+        
+        // This folder matches if we're at the end of URI and have a page
+        if ($hasController || $hasView) {
+            if ($uriIndex === count($uriSegments)) {
+                // Exact match - all URI segments consumed
                 $this->matchedFolderPath = $currentFolderPath;
+                $this->params = $params;
                 if ($hasController) {
                     $this->controllerPath = $currentFolderPath . "/page.php";
                 }
                 if ($hasView) {
                     $this->viewPath = $currentFolderPath . "/page.html.php";
                 }
-
-                if ($currentLayoutPath) {
-                    $this->layoutPath = $currentLayoutPath;
-                }
+                $this->layoutPath = $currentLayoutPath;
                 return true;
             }
         }
 
+        // If we've consumed all URI segments but no page found here, return false
+        if ($uriIndex >= count($uriSegments)) {
+            return false;
+        }
+
+        // Get current URI segment to match
+        $currentSegment = $uriSegments[$uriIndex];
+
+        // Look for matching subfolders
         $folderPaths = glob($currentFolderPath . "/*", GLOB_ONLYDIR);
         if ($folderPaths === false) {
             return false;
         }
 
         foreach ($folderPaths as $folderPath) {
-            if ($this->dfs($folderPath, $currentLayoutPath)) {
-                return true;
+            $folderName = basename($folderPath);
+            
+            // Check if folder matches the current URI segment
+            if ($this->folderMatchesSegment($folderName, $currentSegment, $params)) {
+                // Static or single dynamic match - advance URI index by 1
+                if ($this->dfs($folderPath, $uriSegments, $uriIndex + 1, $currentLayoutPath, $params)) {
+                    return true;
+                }
+                
+                // If match failed and we set a param, remove it
+                if (preg_match('/^\[([^\]]+)\]$/', $folderName, $matches)) {
+                    unset($params[$matches[1]]);
+                }
+            }
+            elseif ($this->isCatchAllFolder($folderName)) {
+                // Catch-all folder - consume all remaining segments
+                $newParams = $params;
+                $this->extractCatchAllParams($folderName, $uriSegments, $uriIndex, $newParams);
+                
+                if ($this->dfs($folderPath, $uriSegments, count($uriSegments), $currentLayoutPath, $newParams)) {
+                    $params = $newParams;
+                    return true;
+                }
+            }
+            elseif ($this->isRouteGroup($folderName)) {
+                // Route group folder - enter it without consuming URI segment
+                // This allows finding routes inside groups like (codes)/404
+                if ($this->dfs($folderPath, $uriSegments, $uriIndex, $currentLayoutPath, $params)) {
+                    return true;
+                }
             }
         }
 
         return false;
+    }
+
+    /**
+     * Check if folder name matches URI segment
+     */
+    private function folderMatchesSegment(string $folderName, string $uriSegment, array &$params): bool
+    {
+        // Strip route groups (auth) → auth
+        $folderName = preg_replace('/^\(([^)]+)\)$/', '$1', $folderName);
+        
+        // Static match
+        if ($folderName === $uriSegment) {
+            return true;
+        }
+        
+        // Dynamic segment [slug]
+        if (preg_match('/^\[([^\].]+)\]$/', $folderName, $matches)) {
+            $params[$matches[1]] = $uriSegment;
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Check if folder is a catch-all pattern
+     */
+    private function isCatchAllFolder(string $folderName): bool
+    {
+        return preg_match('/^\[\.\.\.[^\]]+\]$/', $folderName) || 
+               preg_match('/^\[\[\.\.\.[^\]]+\]\]$/', $folderName);
+    }
+
+    /**
+     * Extract parameters from catch-all folder
+     */
+    private function extractCatchAllParams(string $folderName, array $uriSegments, int $uriIndex, array &$params): void
+    {
+        // Required catch-all [...slug]
+        if (preg_match('/^\[\.\.\.([^\]]+)\]$/', $folderName, $matches)) {
+            $paramName = $matches[1];
+            $remaining = array_slice($uriSegments, $uriIndex);
+            $params[$paramName] = $remaining;
+        }
+        // Optional catch-all [[...slug]]
+        elseif (preg_match('/^\[\[\.\.\.([^\]]+)\]\]$/', $folderName, $matches)) {
+            $paramName = $matches[1];
+            $remaining = array_slice($uriSegments, $uriIndex);
+            if (!empty($remaining)) {
+                $params[$paramName] = $remaining;
+            }
+            // If empty, param stays unset (undefined like Next.js)
+        }
+    }
+
+    /**
+     * Check if folder is a route group (parentheses notation)
+     */
+    private function isRouteGroup(string $folderName): bool
+    {
+        return preg_match('/^\([^)]+\)$/', $folderName) === 1;
     }
 
     private function stripGroupsFromPath(string $currentFolderPath): string
