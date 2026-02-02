@@ -46,7 +46,7 @@ app/
 3. [Quick Start](#-quick-start)
 4. [Documentation](#-documentation)
    - [Directory Structure](#directory-structure)
-   - [Routing](#routing)
+   - [Routing System](#routing-system)
    - [Page Files](#page-files)
    - [Layouts](#layouts)
    - [Error Boundaries](#error-boundaries)
@@ -69,7 +69,9 @@ app/
 
 ## Features
 
-- **File-Based Routing** - Routes mirror your folder structure
+### Core Features
+
+- **File-Based Routing** - Routes mirror your folder structure automatically
 - **Dynamic Routes** - `[slug]`, `[...slug]`, `[[...slug]]` patterns like Next.js
 - **Route Groups** - Organize with `(group)` notation, URL stays clean
 - **Controller + View** - Separate logic (`page.php`) from presentation (`page.html.php`)
@@ -79,10 +81,17 @@ app/
 - **FileHandler Library** - Schema-based file parsing and operations
 - **Zero Config** - Works immediately with sensible defaults
 - **Secure by Default** - Path traversal protection, extension validation
+
+### Advanced Features
+
 - **SEO Metadata** - Next.js style metadata API with Open Graph, Twitter Cards, and SEO optimization
 - **Auto-Validation** - Automatic input validation with enable/disable toggle
 - **Proxies** - Request filtering with auth, rate limiting, CORS, logging, and CSRF protection
 - **POST Handling** - Built-in support for form submissions and data processing
+- **Dynamic Class Loading** - PSR-4 autoloading with zero manual requires
+- **Query String Parsing** - Automatic variable extraction from URL parameters
+- **File Uploads** - Secure file handling with validation
+- **Configuration Management** - Centralized app configuration
 
 ---
 
@@ -106,9 +115,15 @@ use NextPHP\Core\FileHandler;
 use NextPHP\Core\Metadata;
 use NextPHP\Core\Validator;
 
+use App\Services\PaymentService;
+use App\Helpers\StringHelper;
+
 $fileHandler = new FileHandler(__DIR__ . '/../storage');
 Metadata::set(['title' => 'My Page']);
 Validator::schema(['id' => 'required|int']);
+
+$payment = new PaymentService();
+$formatted = StringHelper::format('Hello World');
 ```
 
 ### Key Benefits
@@ -128,8 +143,8 @@ Register additional namespaces in `config.php`:
 use NextPHP\Core\ClassLoader;
 
 // Register custom namespace
-ClassLoader::register('App\\Services', __DIR__ . '/services');
-ClassLoader::register('App\\Helpers', __DIR__ . '/helpers');
+ClassLoader::register('App\Services', __DIR__ . '/services');
+ClassLoader::register('App\Helpers', __DIR__ . '/helpers');
 
 // Now these classes are auto-loadable
 use App\Services\PaymentService;
@@ -247,7 +262,7 @@ nextphp/
 
 ---
 
-### Routing
+### Routing System
 
 #### Basic Routes
 
@@ -345,7 +360,6 @@ Runs after controller. Variables from `page.php` are available.
 ```php
 <?php
 // app/api/users/page.php
-
 use NextPHP\Core\FileHandler;
 
 $fileHandler = new FileHandler(__DIR__ . '/../../../storage');
@@ -971,7 +985,6 @@ Validates authentication tokens:
 ```php
 <?php
 // proxies/config.php
-
 use NextPHP\Core\Proxy\AuthProxy;
 
 return [
@@ -989,7 +1002,6 @@ Prevents abuse by limiting request frequency:
 ```php
 <?php
 // proxies/config.php
-
 use NextPHP\Core\Proxy\RateLimitProxy;
 
 return [
@@ -1012,7 +1024,6 @@ Handles Cross-Origin Resource Sharing:
 ```php
 <?php
 // proxies/config.php
-
 use NextPHP\Core\Proxy\CORSProxy;
 
 return [
@@ -1545,7 +1556,7 @@ $mailFrom = Config::get('mail.from');
 
 | Method | Description | Example |
 |--------|-------------|---------|
-| `register($namespace, $path)` | Register namespace | `ClassLoader::register('App\\', 'app/')` |
+| `register($namespace, $path)` | Register namespace | `ClassLoader::register('App\', 'app/')` |
 | `load($class)` | Load class manually | `ClassLoader::load('SomeClass')` |
 
 ---
