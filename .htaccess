@@ -1,0 +1,13 @@
+RewriteEngine On
+
+# Prevent directory traversal attempts
+RewriteCond %{THE_REQUEST} \.\./
+RewriteRule .* - [F,L]
+
+# Allow direct access to files in public folder
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^public/ - [L]
+
+# Route everything else to index.php
+RewriteRule ^(.*)$ public/index.php [QSA,L]
