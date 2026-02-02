@@ -1,3 +1,0 @@
-This is a demo file created by FileHandler.
-Created at: 2026-02-02 11:43:35
-Appended line!

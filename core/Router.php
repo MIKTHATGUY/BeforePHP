@@ -47,6 +47,33 @@ class Router
         return $this->params[$key] ?? $default;
     }
 
+    /**
+     * Get POST data from form submissions
+     */
+    public function getPostData(): array
+    {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            return $_POST;
+        }
+        return [];
+    }
+
+    /**
+     * Check if current request is POST
+     */
+    public function isPost(): bool
+    {
+        return $_SERVER['REQUEST_METHOD'] === 'POST';
+    }
+
+    /**
+     * Get request method (GET, POST, PUT, DELETE, etc.)
+     */
+    public function getMethod(): string
+    {
+        return $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    }
+
     public function isNotFound(): bool
     {
         return $this->isNotFound;
@@ -100,7 +127,8 @@ class Router
     private function resolveRoute(): void
     {
         $uriSegments = $this->pageUriPath !== "" ? explode("/", $this->pageUriPath) : [];
-        $params = [];
+        // Start with existing params (query string params already parsed in parseUri)
+        $params = $this->params;
         
         if (!$this->dfs(Config::get('paths.app'), $uriSegments, 0, null, $params)) {
             // Route not found, try to find 404 page

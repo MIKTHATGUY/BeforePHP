@@ -69,14 +69,31 @@
         .reset-btn:hover {
             background: #c0392b;
         }
+        .copy-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        .copy-btn:hover {
+            background: #2980b9;
+        }
+        .copy-btn.copied {
+            background: #27ae60;
+        }
     </style>
 </head>
 <body>
     <div class="error-container">
         <h1>⚠️ Something went wrong!</h1>
         
-        <div class="error-message">
+        <div class="error-message" id="errorMessage">
             <strong>Error:</strong> <?= htmlspecialchars($errorMessage) ?>
+            <button class="copy-btn" onclick="copyError()" id="copyBtn">Copy</button>
         </div>
         
         <p>An error occurred while loading this page. Please try again or contact support if the problem persists.</p>
@@ -84,7 +101,7 @@
         <button class="reset-btn" onclick="window.location.reload()">Try Again</button>
         
         <?php if (ini_get('display_errors')): ?>
-        <details class="error-details">
+        <details class="error-details" id="errorDetails">
             <summary>Debug Information (visible in development mode)</summary>
             <p><strong>File:</strong> <?= htmlspecialchars($errorFile) ?></p>
             <p><strong>Line:</strong> <?= $errorLine ?></p>
@@ -92,5 +109,39 @@
         </details>
         <?php endif; ?>
     </div>
+    <script>
+        function copyError() {
+            let fullError = '';
+            
+            // Add main error message
+            const errorMessage = document.getElementById('errorMessage').innerText.replace('Copy', '').trim();
+            fullError += errorMessage + '\n\n';
+            
+            // Add debug information if available
+            const errorDetails = document.getElementById('errorDetails');
+            if (errorDetails) {
+                const paragraphs = errorDetails.querySelectorAll('p');
+                const trace = errorDetails.querySelector('pre');
+                
+                paragraphs.forEach(p => {
+                    fullError += p.innerText + '\n';
+                });
+                
+                if (trace) {
+                    fullError += '\nStack Trace:\n' + trace.innerText;
+                }
+            }
+            
+            navigator.clipboard.writeText(fullError).then(() => {
+                const btn = document.getElementById('copyBtn');
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = 'Copy';
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+    </script>
 </body>
 </html>
